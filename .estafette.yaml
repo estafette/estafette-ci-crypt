@@ -1,0 +1,45 @@
+builder:
+  track: dev
+
+labels:
+  app: estafette-ci-crypt
+  team: estafette-team
+  language: golang
+
+pipelines:
+  set-pending-build-status:
+    image: extensions/github-status:dev
+    status: pending
+    when:
+      server == 'estafette'
+
+  build:
+    image: golang:1.9.0-alpine3.6
+    workDir: /go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}
+    commands:
+    - go test -v `go list ./... | grep -v /vendor/`
+
+  # tag-revision:
+  #   image: golang:1.9.0-alpine3.6
+  #   commands:
+  #   - apk --no-cache add git
+  #   - git tag ${ESTAFETTE_BUILD_VERSION}
+  #   - git push origin ${ESTAFETTE_BUILD_VERSION}
+  #   when:
+  #     status == 'succeeded' &&
+  #     branch == 'master' &&
+  #     server == 'gocd'
+
+  set-build-status:
+    image: extensions/github-status:dev
+    when:
+      server == 'estafette'
+
+  slack-notify:
+    image: extensions/slack-build-status:dev
+    name: ${ESTAFETTE_LABEL_APP}
+    channels:
+    - '#build-status'
+    when:
+      status == 'failed' &&
+      server == 'gocd'
