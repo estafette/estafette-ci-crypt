@@ -15,10 +15,6 @@ version:
     releaseBranch: master
 
 pipelines:
-  set-pending-build-status:
-    image: extensions/github-status:dev
-    status: pending
-
   build:
     image: golang:1.10.2-alpine3.7
     workDir: /go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}
@@ -31,9 +27,6 @@ pipelines:
     - apk --no-cache add git
     - git tag ${ESTAFETTE_BUILD_VERSION}
     - git push origin ${ESTAFETTE_BUILD_VERSION}
-
-  set-build-status:
-    image: extensions/github-status:dev
 
   slack-notify:
     image: extensions/slack-build-status:dev
