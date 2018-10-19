@@ -19,6 +19,9 @@ stages:
   build:
     image: golang:1.11.1-alpine3.8
     workDir: /go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}
+    env:
+      CGO_ENABLED: 0
+      GOOS: linux
     commands:
     - go test -v `go list ./... | grep -v /vendor/`
 
