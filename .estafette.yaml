@@ -17,7 +17,7 @@ version:
 
 stages:
   build:
-    image: golang:1.10.2-alpine3.7
+    image: golang:1.11.1-alpine3.8
     workDir: /go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}
     commands:
     - go test -v `go list ./... | grep -v /vendor/`
