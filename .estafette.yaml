@@ -17,7 +17,7 @@ version:
 
 stages:
   build:
-    image: golang:1.11.1-alpine3.8
+    image: golang:1.11.2-alpine3.8
     workDir: /go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}
     env:
       CGO_ENABLED: 0
@@ -33,10 +33,10 @@ stages:
     - git push origin ${ESTAFETTE_BUILD_VERSION}
 
   slack-notify:
-    image: extensions/slack-build-status:dev
-    webhook: estafette.secret(fG4kwm5DOqzVjkqB.3kNhXhStG_Wmf8ZR9fKwTLwbj7RKlLiwE2LFD17GwhEVqe_7Y2m6K-FECC9Exo6A04LbJXGK-MtVEi_2L-MntNNYIz212MxsvHkObll_G3bQ8wZQHg9xOwJAKP3d)
-    name: ${ESTAFETTE_LABEL_APP}
+    image: extensions/slack-build-status:stable
+    workspace: estafette
     channels:
     - '#build-status'
     when:
+      status == 'succeeded' ||
       status == 'failed'
