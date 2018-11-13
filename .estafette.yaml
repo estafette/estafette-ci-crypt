@@ -26,7 +26,7 @@ stages:
     - go test -v `go list ./... | grep -v /vendor/`
 
   tag-revision:
-    image: golang:1.10.2-alpine3.7
+    image: golang:1.11.2-alpine3.8
     commands:
     - apk --no-cache add git
     - git tag ${ESTAFETTE_BUILD_VERSION}
