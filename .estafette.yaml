@@ -33,7 +33,7 @@ stages:
     - git push origin ${ESTAFETTE_BUILD_VERSION}
 
   slack-notify:
-    image: extensions/slack-build-status:stable
+    image: extensions/slack-build-status:dev
     workspace: estafette
     channels:
     - '#build-status'
