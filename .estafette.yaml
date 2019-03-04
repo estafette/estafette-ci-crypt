@@ -18,9 +18,6 @@ version:
 stages:
   build:
     image: golang:1.12.0-stretch
-    env:
-      CGO_ENABLED: 0
-      GOOS: linux
     commands:
     - go test
 
