@@ -11,14 +11,13 @@ version:
   semver:
     major: 0
     minor: 0
-    patch: '{{auto}}'
-    labelTemplate: '{{branch}}'
-    releaseBranch: master
 
 stages:
   build:
     image: golang:1.12.0-alpine3.9
     env:
+      CGO_ENABLED: 0
+      GOOS: linux
       GOFLAGS: -mod=vendor
     commands:
     - go test ./...
