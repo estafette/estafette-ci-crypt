@@ -12,14 +12,16 @@ import (
 	"strings"
 )
 
+const defaultPipelineWhitelist = ".+"
+
 // SecretHelper is the interface for encrypting and decrypting secrets
 type SecretHelper interface {
-	Encrypt(unencryptedText string) (encryptedTextPlusNonce string, err error)
-	Decrypt(encryptedTextPlusNonce string) (decryptedText string, err error)
-	EncryptEnvelope(unencryptedText string) (encryptedTextInEnvelope string, err error)
-	DecryptEnvelope(encryptedTextInEnvelope string) (decryptedText string, err error)
-	DecryptAllEnvelopes(encryptedTextWithEnvelopes string) (decryptedText string, err error)
-	ReencryptAllEnvelopes(encryptedTextWithEnvelopes string, base64encodedKey bool) (reencryptedText string, key string, err error)
+	Encrypt(unencryptedText, pipelineWhitelist string) (encryptedTextPlusNonce string, err error)
+	Decrypt(encryptedTextPlusNonce, pipeline string) (decryptedText, pipelineWhitelist string, err error)
+	EncryptEnvelope(unencryptedText, pipelineWhitelist string) (encryptedTextInEnvelope string, err error)
+	DecryptEnvelope(encryptedTextInEnvelope, pipeline string) (decryptedText, pipelineWhitelist string, err error)
+	DecryptAllEnvelopes(encryptedTextWithEnvelopes, pipeline string) (decryptedText string, err error)
+	ReencryptAllEnvelopes(encryptedTextWithEnvelopes, pipeline string, base64encodedKey bool) (reencryptedText string, key string, err error)
 	GenerateKey(numberOfBytes int, base64encodedKey bool) (key string, err error)
 }
 
@@ -50,11 +52,11 @@ func (sh *secretHelperImpl) getKey(key string, base64encodedKey bool) (keyBytes 
 	return keyBytes, nil
 }
 
-func (sh *secretHelperImpl) Encrypt(unencryptedText string) (encryptedTextPlusNonce string, err error) {
-	return sh.encryptWithKey(unencryptedText, sh.key, sh.base64encodedKey)
+func (sh *secretHelperImpl) Encrypt(unencryptedText, pipelineWhitelist string) (encryptedTextPlusNonce string, err error) {
+	return sh.encryptWithKey(unencryptedText, pipelineWhitelist, sh.key, sh.base64encodedKey)
 }
 
-func (sh *secretHelperImpl) encryptWithKey(unencryptedText, key string, base64encodedKey bool) (encryptedTextPlusNonce string, err error) {
+func (sh *secretHelperImpl) encryptWithKey(unencryptedText, pipelineWhitelist, key string, base64encodedKey bool) (encryptedTextPlusNonce string, err error) {
 
 	// The key argument should be the AES key, either 16 or 32 bytes to select AES-128 or AES-256.
 	keyBytes, err := sh.getKey(key, base64encodedKey)
@@ -83,62 +85,93 @@ func (sh *secretHelperImpl) encryptWithKey(unencryptedText, key string, base64en
 
 	encryptedTextPlusNonce = fmt.Sprintf("%v.%v", base64.URLEncoding.EncodeToString(nonce), base64.URLEncoding.EncodeToString(ciphertext))
 
+	pipelineWhitelist = strings.TrimSpace(pipelineWhitelist)
+	if pipelineWhitelist != "" && pipelineWhitelist != defaultPipelineWhitelist {
+		cipherpipelinewhitelist := aesgcm.Seal(nil, nonce, []byte(pipelineWhitelist), nil)
+		encryptedTextPlusNonce += fmt.Sprintf(".%v", base64.URLEncoding.EncodeToString(cipherpipelinewhitelist))
+	}
+
 	return
 }
 
-func (sh *secretHelperImpl) Decrypt(encryptedTextPlusNonce string) (decryptedText string, err error) {
+func (sh *secretHelperImpl) Decrypt(encryptedTextPlusNonce, pipeline string) (decryptedText, pipelineWhitelist string, err error) {
 
-	return sh.decryptWithKey(encryptedTextPlusNonce, sh.key, sh.base64encodedKey)
+	return sh.decryptWithKey(encryptedTextPlusNonce, pipeline, sh.key, sh.base64encodedKey)
 }
 
-func (sh *secretHelperImpl) decryptWithKey(encryptedTextPlusNonce string, key string, base64encodedKey bool) (decryptedText string, err error) {
+func (sh *secretHelperImpl) decryptWithKey(encryptedTextPlusNonce, pipeline string, key string, base64encodedKey bool) (decryptedText, pipelineWhitelist string, err error) {
 
-	splittedStrings := strings.Split(encryptedTextPlusNonce, ".")
-	if splittedStrings == nil || len(splittedStrings) != 2 {
-		err = errors.New("The encrypted text plus nonce doesn't split correctly")
-		return
-	}
-
-	usedNonce := splittedStrings[0]
-	encryptedText := splittedStrings[1]
-
-	// The key argument should be the AES key, either 16 or 32 bytes to select AES-128 or AES-256.
+	// get decryption key
 	keyBytes, err := sh.getKey(key, base64encodedKey)
 	if err != nil {
 		return
 	}
-	ciphertext, _ := base64.URLEncoding.DecodeString(encryptedText)
-
-	nonce, _ := base64.URLEncoding.DecodeString(usedNonce)
-
 	block, err := aes.NewCipher(keyBytes)
 	if err != nil {
 		return
 	}
-
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return
 	}
 
-	plaintext, err := aesgcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
+	// split string on dots to get nonce, value and pipeline whitelist
+	splittedStrings := strings.Split(encryptedTextPlusNonce, ".")
+	if splittedStrings == nil || (len(splittedStrings) != 2 && len(splittedStrings) != 3) {
+		err = errors.New("The encrypted text plus nonce doesn't split correctly")
 		return
 	}
 
-	decryptedText = string(plaintext)
+	// get nonce
+	nonceBase64 := splittedStrings[0]
+	nonce, _ := base64.URLEncoding.DecodeString(nonceBase64)
+
+	// get value
+	valueBase64 := splittedStrings[1]
+	valueEncrypted, _ := base64.URLEncoding.DecodeString(valueBase64)
+	valueBytes, err := aesgcm.Open(nil, nonce, valueEncrypted, nil)
+	if err != nil {
+		return
+	}
+	decryptedText = string(valueBytes)
+
+	if len(splittedStrings) == 2 {
+		pipelineWhitelist = defaultPipelineWhitelist
+
+		// no need to check pipeline against pipeline whitelist, since the default matches all pipelines
+		return
+	}
+
+	// get pipeline whitelist if present
+	pipelineWhitelistBase64 := splittedStrings[2]
+	pipelineWhitelistEncrypted, _ := base64.URLEncoding.DecodeString(pipelineWhitelistBase64)
+	pipelineWhitelistBytes, err := aesgcm.Open(nil, nonce, pipelineWhitelistEncrypted, nil)
+	if err != nil {
+		return
+	}
+	pipelineWhitelist = string(pipelineWhitelistBytes)
+
+	// check if pipeline is matched by pipeline whitelist regular expression
+	pattern := fmt.Sprintf("^%v$", pipelineWhitelist)
+	validForPipeline, err := regexp.MatchString(pattern, pipeline)
+	if err != nil {
+		return
+	}
+	if !validForPipeline {
+		return "", "", fmt.Errorf("Pipeline %v does not match regular expression ^%v$", pipeline, pipelineWhitelist)
+	}
 
 	return
 }
 
-func (sh *secretHelperImpl) EncryptEnvelope(unencryptedText string) (encryptedTextInEnvelope string, err error) {
+func (sh *secretHelperImpl) EncryptEnvelope(unencryptedText, pipelineWhitelist string) (encryptedTextInEnvelope string, err error) {
 
-	return sh.encryptEnvelopeWithKey(unencryptedText, sh.key, sh.base64encodedKey)
+	return sh.encryptEnvelopeWithKey(unencryptedText, pipelineWhitelist, sh.key, sh.base64encodedKey)
 }
 
-func (sh *secretHelperImpl) encryptEnvelopeWithKey(unencryptedText, key string, base64encodedKey bool) (encryptedTextInEnvelope string, err error) {
+func (sh *secretHelperImpl) encryptEnvelopeWithKey(unencryptedText, pipelineWhitelist, key string, base64encodedKey bool) (encryptedTextInEnvelope string, err error) {
 
-	encryptedText, err := sh.encryptWithKey(unencryptedText, key, base64encodedKey)
+	encryptedText, err := sh.encryptWithKey(unencryptedText, pipelineWhitelist, key, base64encodedKey)
 	if err != nil {
 		return
 	}
@@ -147,7 +180,7 @@ func (sh *secretHelperImpl) encryptEnvelopeWithKey(unencryptedText, key string, 
 	return
 }
 
-func (sh *secretHelperImpl) DecryptEnvelope(encryptedTextInEnvelope string) (decryptedText string, err error) {
+func (sh *secretHelperImpl) DecryptEnvelope(encryptedTextInEnvelope, pipeline string) (decryptedText, pipelineWhitelist string, err error) {
 
 	r, err := regexp.Compile(`^estafette\.secret\(([a-zA-Z0-9.=_-]+)\)$`)
 	if err != nil {
@@ -156,10 +189,10 @@ func (sh *secretHelperImpl) DecryptEnvelope(encryptedTextInEnvelope string) (dec
 
 	matches := r.FindStringSubmatch(encryptedTextInEnvelope)
 	if matches == nil {
-		return encryptedTextInEnvelope, nil
+		return encryptedTextInEnvelope, defaultPipelineWhitelist, nil
 	}
 
-	decryptedText, err = sh.Decrypt(matches[1])
+	decryptedText, pipelineWhitelist, err = sh.Decrypt(matches[1], pipeline)
 	if err != nil {
 		return
 	}
@@ -167,9 +200,9 @@ func (sh *secretHelperImpl) DecryptEnvelope(encryptedTextInEnvelope string) (dec
 	return
 }
 
-func (sh *secretHelperImpl) decryptEnvelopeInBytes(encryptedTextInEnvelope []byte) []byte {
+func (sh *secretHelperImpl) decryptEnvelopeInBytes(encryptedTextInEnvelope []byte, pipeline string) []byte {
 
-	decryptedText, err := sh.DecryptEnvelope(string(encryptedTextInEnvelope))
+	decryptedText, _, err := sh.DecryptEnvelope(string(encryptedTextInEnvelope), pipeline)
 	if err != nil {
 		return nil
 	}
@@ -177,14 +210,16 @@ func (sh *secretHelperImpl) decryptEnvelopeInBytes(encryptedTextInEnvelope []byt
 	return []byte(decryptedText)
 }
 
-func (sh *secretHelperImpl) DecryptAllEnvelopes(encryptedTextWithEnvelopes string) (decryptedText string, err error) {
+func (sh *secretHelperImpl) DecryptAllEnvelopes(encryptedTextWithEnvelopes, pipeline string) (decryptedText string, err error) {
 
 	r, err := regexp.Compile(`estafette\.secret\([a-zA-Z0-9.=_-]+\)`)
 	if err != nil {
 		return
 	}
 
-	decryptedText = string(r.ReplaceAllFunc([]byte(encryptedTextWithEnvelopes), sh.decryptEnvelopeInBytes))
+	decryptedText = string(r.ReplaceAllFunc([]byte(encryptedTextWithEnvelopes), func(in []byte) []byte {
+		return sh.decryptEnvelopeInBytes(in, pipeline)
+	}))
 
 	return
 }
@@ -206,7 +241,7 @@ func (sh *secretHelperImpl) GenerateKey(numberOfBytes int, base64encodedKey bool
 	return keyString, nil
 }
 
-func (sh *secretHelperImpl) ReencryptAllEnvelopes(encryptedTextWithEnvelopes string, base64encodedKey bool) (reencryptedText string, key string, err error) {
+func (sh *secretHelperImpl) ReencryptAllEnvelopes(encryptedTextWithEnvelopes, pipeline string, base64encodedKey bool) (reencryptedText string, key string, err error) {
 
 	// generate 32 bytes key
 	key, err = sh.GenerateKey(32, base64encodedKey)
@@ -222,12 +257,12 @@ func (sh *secretHelperImpl) ReencryptAllEnvelopes(encryptedTextWithEnvelopes str
 
 	reencryptedText = string(r.ReplaceAllFunc([]byte(encryptedTextWithEnvelopes), func(encryptedTextInEnvelope []byte) []byte {
 
-		decryptedText, err := sh.DecryptEnvelope(string(encryptedTextInEnvelope))
+		decryptedText, pipelineWhitelist, err := sh.DecryptEnvelope(string(encryptedTextInEnvelope), pipeline)
 		if err != nil {
 			return nil
 		}
 
-		reencryptedTextInEnvelope, err := sh.encryptEnvelopeWithKey(decryptedText, key, base64encodedKey)
+		reencryptedTextInEnvelope, err := sh.encryptEnvelopeWithKey(decryptedText, pipelineWhitelist, key, base64encodedKey)
 		if err != nil {
 			return nil
 		}
