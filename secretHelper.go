@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const defaultPipelineWhitelist = ".+"
+const defaultPipelineWhitelist = ".*"
 
 // SecretHelper is the interface for encrypting and decrypting secrets
 type SecretHelper interface {

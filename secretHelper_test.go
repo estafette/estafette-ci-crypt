@@ -29,7 +29,7 @@ func TestEncrypt(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		originalText := "this is my secret"
-		pipelineWhitelist := ".+"
+		pipelineWhitelist := ".*"
 
 		// act
 		encryptedTextPlusNonce, err := secretHelper.Encrypt(originalText, pipelineWhitelist)
@@ -102,7 +102,7 @@ func TestDecrypt(t *testing.T) {
 		_, pipelineWhitelist, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
 
 		assert.Nil(t, err)
-		assert.Equal(t, ".+", pipelineWhitelist)
+		assert.Equal(t, ".*", pipelineWhitelist)
 	})
 
 	t.Run("ReturnsErrorIfStringDoesNotContainDot", func(t *testing.T) {
