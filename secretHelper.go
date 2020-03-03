@@ -127,30 +127,17 @@ func (sh *secretHelperImpl) decryptWithKey(encryptedTextPlusNonce, pipeline stri
 	nonceBase64 := splittedStrings[0]
 	nonce, _ := base64.URLEncoding.DecodeString(nonceBase64)
 
-	// get value
-	valueBase64 := splittedStrings[1]
-	valueEncrypted, _ := base64.URLEncoding.DecodeString(valueBase64)
-	valueBytes, err := aesgcm.Open(nil, nonce, valueEncrypted, nil)
-	if err != nil {
-		return
-	}
-	decryptedText = string(valueBytes)
-
-	if len(splittedStrings) == 2 {
-		pipelineWhitelist = DefaultPipelineWhitelist
-
-		// no need to check pipeline against pipeline whitelist, since the default matches all pipelines
-		return
-	}
-
 	// get pipeline whitelist if present
-	pipelineWhitelistBase64 := splittedStrings[2]
-	pipelineWhitelistEncrypted, _ := base64.URLEncoding.DecodeString(pipelineWhitelistBase64)
-	pipelineWhitelistBytes, err := aesgcm.Open(nil, nonce, pipelineWhitelistEncrypted, nil)
-	if err != nil {
-		return
+	pipelineWhitelist = DefaultPipelineWhitelist
+	if len(splittedStrings) == 3 {
+		pipelineWhitelistBase64 := splittedStrings[2]
+		pipelineWhitelistEncrypted, _ := base64.URLEncoding.DecodeString(pipelineWhitelistBase64)
+		pipelineWhitelistBytes, err := aesgcm.Open(nil, nonce, pipelineWhitelistEncrypted, nil)
+		if err != nil {
+			return "", "", err
+		}
+		pipelineWhitelist = string(pipelineWhitelistBytes)
 	}
-	pipelineWhitelist = string(pipelineWhitelistBytes)
 
 	// check if pipeline is matched by pipeline whitelist regular expression
 	pattern := fmt.Sprintf("^%v$", pipelineWhitelist)
@@ -161,6 +148,15 @@ func (sh *secretHelperImpl) decryptWithKey(encryptedTextPlusNonce, pipeline stri
 	if !validForPipeline {
 		return "", "", fmt.Errorf("Pipeline %v does not match regular expression ^%v$", pipeline, pipelineWhitelist)
 	}
+
+	// get value
+	valueBase64 := splittedStrings[1]
+	valueEncrypted, _ := base64.URLEncoding.DecodeString(valueBase64)
+	valueBytes, err := aesgcm.Open(nil, nonce, valueEncrypted, nil)
+	if err != nil {
+		return
+	}
+	decryptedText = string(valueBytes)
 
 	return
 }
