@@ -12,7 +12,8 @@ import (
 	"strings"
 )
 
-const defaultPipelineWhitelist = ".*"
+// DefaultPipelineWhitelist is the regular expression that allows any pipeline to decrypt a secret
+const DefaultPipelineWhitelist = ".*"
 
 // SecretHelper is the interface for encrypting and decrypting secrets
 type SecretHelper interface {
@@ -86,7 +87,7 @@ func (sh *secretHelperImpl) encryptWithKey(unencryptedText, pipelineWhitelist, k
 	encryptedTextPlusNonce = fmt.Sprintf("%v.%v", base64.URLEncoding.EncodeToString(nonce), base64.URLEncoding.EncodeToString(ciphertext))
 
 	pipelineWhitelist = strings.TrimSpace(pipelineWhitelist)
-	if pipelineWhitelist != "" && pipelineWhitelist != defaultPipelineWhitelist {
+	if pipelineWhitelist != "" && pipelineWhitelist != DefaultPipelineWhitelist {
 		cipherpipelinewhitelist := aesgcm.Seal(nil, nonce, []byte(pipelineWhitelist), nil)
 		encryptedTextPlusNonce += fmt.Sprintf(".%v", base64.URLEncoding.EncodeToString(cipherpipelinewhitelist))
 	}
@@ -136,7 +137,7 @@ func (sh *secretHelperImpl) decryptWithKey(encryptedTextPlusNonce, pipeline stri
 	decryptedText = string(valueBytes)
 
 	if len(splittedStrings) == 2 {
-		pipelineWhitelist = defaultPipelineWhitelist
+		pipelineWhitelist = DefaultPipelineWhitelist
 
 		// no need to check pipeline against pipeline whitelist, since the default matches all pipelines
 		return
@@ -189,7 +190,7 @@ func (sh *secretHelperImpl) DecryptEnvelope(encryptedTextInEnvelope, pipeline st
 
 	matches := r.FindStringSubmatch(encryptedTextInEnvelope)
 	if matches == nil {
-		return encryptedTextInEnvelope, defaultPipelineWhitelist, nil
+		return encryptedTextInEnvelope, DefaultPipelineWhitelist, nil
 	}
 
 	decryptedText, pipelineWhitelist, err = sh.Decrypt(matches[1], pipeline)
