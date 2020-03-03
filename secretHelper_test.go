@@ -1,7 +1,6 @@
 package crypt
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -10,19 +9,53 @@ import (
 
 func TestEncrypt(t *testing.T) {
 
-	t.Run("ReturnsEncryptedValueWithNonceDotEncryptedString", func(t *testing.T) {
+	t.Run("ReturnsEncryptedValueWithNonceDotEncryptedStringIfPipelineWhitelistIsEmpty", func(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		originalText := "this is my secret"
+		pipelineWhitelist := ""
 
 		// act
-		encryptedTextPlusNonce, err := secretHelper.Encrypt(originalText)
+		encryptedTextPlusNonce, err := secretHelper.Encrypt(originalText, pipelineWhitelist)
 
 		assert.Nil(t, err)
 		splittedStrings := strings.Split(encryptedTextPlusNonce, ".")
 		assert.Equal(t, 2, len(splittedStrings))
 		assert.Equal(t, 16, len(splittedStrings[0]))
-		fmt.Println(encryptedTextPlusNonce)
+		// fmt.Println(encryptedTextPlusNonce)
+	})
+
+	t.Run("ReturnsEncryptedValueWithNonceDotEncryptedStringIfPipelineWhitelistIsDefault", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+		originalText := "this is my secret"
+		pipelineWhitelist := ".*"
+
+		// act
+		encryptedTextPlusNonce, err := secretHelper.Encrypt(originalText, pipelineWhitelist)
+
+		assert.Nil(t, err)
+		splittedStrings := strings.Split(encryptedTextPlusNonce, ".")
+		assert.Equal(t, 2, len(splittedStrings))
+		assert.Equal(t, 16, len(splittedStrings[0]))
+		// fmt.Println(encryptedTextPlusNonce)
+	})
+
+	t.Run("ReturnsEncryptedValueWithNonceDotEncryptedStringDotPipelineWhitelistIfPipelineWhitelistIsNonDefault", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+		originalText := "this is my secret"
+		pipelineWhitelist := "github.com/estafette/estafette-ci-api"
+
+		// act
+		encryptedTextPlusNonce, err := secretHelper.Encrypt(originalText, pipelineWhitelist)
+
+		assert.Nil(t, err)
+		splittedStrings := strings.Split(encryptedTextPlusNonce, ".")
+		assert.Equal(t, 3, len(splittedStrings))
+		assert.Equal(t, 16, len(splittedStrings[0]))
+		// fmt.Println(encryptedTextPlusNonce)
+		// assert.Fail(t, "show me the encrypted value")
 	})
 }
 
@@ -32,9 +65,10 @@ func TestEncryptEnvelope(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		originalText := "this is my secret"
+		pipelineWhitelist := ""
 
 		// act
-		encryptedTextInEnvelope, err := secretHelper.EncryptEnvelope(originalText)
+		encryptedTextInEnvelope, err := secretHelper.EncryptEnvelope(originalText, pipelineWhitelist)
 
 		assert.Nil(t, err)
 		assert.True(t, strings.HasPrefix(encryptedTextInEnvelope, "estafette.secret("))
@@ -49,21 +83,90 @@ func TestDecrypt(t *testing.T) {
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		originalText := "this is my secret"
 		encryptedTextPlusNonce := "deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u"
+		pipeline := "github.com/estafette/estafette-ci-api"
 
 		// act
-		decryptedText, err := secretHelper.Decrypt(encryptedTextPlusNonce)
+		decryptedText, _, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
 
 		assert.Nil(t, err)
 		assert.Equal(t, originalText, decryptedText)
+	})
+
+	t.Run("ReturnsDefaultPipelineWhiteListIfStringContainsOneDot", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+		encryptedTextPlusNonce := "deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u"
+		pipeline := "github.com/estafette/estafette-ci-api"
+
+		// act
+		_, pipelineWhitelist, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
+
+		assert.Nil(t, err)
+		assert.Equal(t, ".*", pipelineWhitelist)
 	})
 
 	t.Run("ReturnsErrorIfStringDoesNotContainDot", func(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		encryptedTextPlusNonce := "deFTz5Bdjg6SUe29oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u"
+		pipeline := "github.com/estafette/estafette-ci-api"
 
 		// act
-		_, err := secretHelper.Decrypt(encryptedTextPlusNonce)
+		_, _, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
+
+		assert.NotNil(t, err)
+	})
+
+	t.Run("ReturnsErrorIfStringContainsMoreThan2Dots", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+		encryptedTextPlusNonce := "deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTd.xHg3.7th9u"
+		pipeline := "github.com/estafette/estafette-ci-api"
+
+		// act
+		_, _, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
+
+		assert.NotNil(t, err)
+	})
+
+	t.Run("ReturnsDecryptedPipelineWhiteListIfStringContainsTwoDots", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+		originalText := "this is my secret"
+		encryptedTextPlusNonce := "7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ="
+		pipeline := "github.com/estafette/estafette-ci-api"
+
+		// act
+		decryptedText, pipelineWhitelist, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
+
+		assert.Nil(t, err)
+		assert.Equal(t, originalText, decryptedText)
+		assert.Equal(t, "github.com/estafette/estafette-ci-api", pipelineWhitelist)
+	})
+
+	t.Run("ReturnsDecryptedPipelineWhiteListIfStringContainsTwoDotsAndPipelineMatchesRegex", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+		originalText := "this is my secret"
+		encryptedTextPlusNonce := "7MZbwVlQJtfLN50U.7dpzK2K9ZYiXw-uy4-VtDQYtUOC8dXGJzvNWBtKNT4SZ._ttuMDe2OMuV1-Sk9fJ-DheE5385dJCn0LQgclmqQWz262VO3kxi"
+		pipeline := "github.com/estafette/estafette-ci-web"
+
+		// act
+		decryptedText, pipelineWhitelist, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
+
+		assert.Nil(t, err)
+		assert.Equal(t, originalText, decryptedText)
+		assert.Equal(t, "github.com/estafette/.+", pipelineWhitelist)
+	})
+
+	t.Run("ReturnsErrorIfPipelineDoesNotMatchPipelineWhitelistRegex", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+		encryptedTextPlusNonce := "7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ="
+		pipeline := "github.com/estafette/estafette-ci-web"
+
+		// act
+		_, _, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
 
 		assert.NotNil(t, err)
 	})
@@ -76,9 +179,10 @@ func TestDecryptEnvelope(t *testing.T) {
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		originalText := "this is my secret"
 		encryptedTextPlusNonce := "estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)"
+		pipeline := "github.com/estafette/estafette-ci-api"
 
 		// act
-		decryptedText, err := secretHelper.DecryptEnvelope(encryptedTextPlusNonce)
+		decryptedText, _, err := secretHelper.DecryptEnvelope(encryptedTextPlusNonce, pipeline)
 
 		assert.Nil(t, err)
 		assert.Equal(t, originalText, decryptedText)
@@ -88,9 +192,10 @@ func TestDecryptEnvelope(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		encryptedTextPlusNonce := "estafette.secret(deFTz5Bdjg6SUe29oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)"
+		pipeline := "github.com/estafette/estafette-ci-api"
 
 		// act
-		_, err := secretHelper.DecryptEnvelope(encryptedTextPlusNonce)
+		_, _, err := secretHelper.DecryptEnvelope(encryptedTextPlusNonce, pipeline)
 
 		assert.NotNil(t, err)
 	})
@@ -99,9 +204,10 @@ func TestDecryptEnvelope(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		builderConfigJSON := `{"action":"build","track":"dev","manifest":{"Builder":{"Track":"stable"},"Labels":{"app":"estafette-ci-builder","app-group":"estafette-ci","language":"golang","team":"estafette-team"},"Version":{"SemVer":{"Major":0,"Minor":0,"Patch":"{{auto}}","LabelTemplate":"{{branch}}","ReleaseBranch":"master"},"Custom":null},"GlobalEnvVars":null,"Pipelines":[{"Name":"git-clone","ContainerImage":"extensions/git-clone:stable","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null, "shallow": false,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":true,"Retries":0,"CustomProperties":null},{"Name":"build","ContainerImage":"golang:1.11.0-alpine3.8","Shell":"/bin/sh","WorkingDirectory":"/go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}","Commands":["apk --update add git","go test 'go list ./... | grep -v /vendor/'","go build -a -installsuffix cgo -ldflags \"-X main.version=${ESTAFETTE_BUILD_VERSION} -X main.revision=${ESTAFETTE_GIT_REVISION} -X main.branch=${ESTAFETTE_GIT_BRANCH} -X main.buildDate=${ESTAFETTE_BUILD_DATETIME}\" -o ./publish/${ESTAFETTE_LABEL_APP} ."],"When":"status == ''succeeded''","EnvVars":{"CGO_ENABLED":"0","DOCKER_API_VERSION":"1.38","GOOS":"linux"},"AutoInjected":false,"Retries":0,"CustomProperties":null},{"Name":"bake-estafette","ContainerImage":"extensions/docker:dev","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":false,"Retries":0,"CustomProperties":{"action":"build","copy":["Dockerfile"],"path":"./publish","repositories":["estafette"]}}],"Releases":null},"jobName":"build-estafette-estafette-ci-builder-391855387650326531","ciServer":{"baseUrl":"https://httpstat.us/200","builderEventsUrl":"https://httpstat.us/200","postLogsUrl":"https://httpstat.us/200","apiKey":""},"buildParams":{"buildID":391855387650326531},"git":{"repoSource":"github.com","repoOwner":"estafette","repoName":"estafette-ci-builder","repoBranch":"integration-test","repoRevision":"f394515b2a91ea69addf42e4b722442b2905e268"},"buildVersion":{"version":"0.0.0-integration-test","major":0,"minor":0,"patch":"0","autoincrement":0},"credentials":[{"name":"github-api-token","type":"github-api-token","additionalProperties":{"token":"${ESTAFETTE_GITHUB_API_TOKEN}"}}],"trustedImages":[{"path":"extensions/docker","runDocker":true},{"path":"estafette/estafette-ci-builder","runPrivileged":true},{"path":"golang","runDocker":true,"allowCommands":true}]}`
+		pipeline := "github.com/estafette/estafette-ci-api"
 
 		// act
-		decryptedText, err := secretHelper.DecryptEnvelope(builderConfigJSON)
+		decryptedText, _, err := secretHelper.DecryptEnvelope(builderConfigJSON, pipeline)
 
 		assert.Nil(t, err)
 		assert.Equal(t, builderConfigJSON, decryptedText)
@@ -115,9 +221,10 @@ func TestDecryptAllEnvelopes(t *testing.T) {
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		builderConfigJSON := `{"action":"build","track":"dev","manifest":{"Builder":{"Track":"stable"},"Labels":{"app":"estafette-ci-builder","app-group":"estafette-ci","language":"golang","team":"estafette-team"},"Version":{"SemVer":{"Major":0,"Minor":0,"Patch":"{{auto}}","LabelTemplate":"{{branch}}","ReleaseBranch":"master"},"Custom":null},"GlobalEnvVars":null,"Pipelines":[{"Name":"git-clone","ContainerImage":"extensions/git-clone:stable","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null, "shallow": false,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":true,"Retries":0,"CustomProperties":null},{"Name":"build","ContainerImage":"golang:1.11.0-alpine3.8","Shell":"/bin/sh","WorkingDirectory":"/go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}","Commands":["apk --update add git","go test 'go list ./... | grep -v /vendor/'","go build -a -installsuffix cgo -ldflags \"-X main.version=${ESTAFETTE_BUILD_VERSION} -X main.revision=${ESTAFETTE_GIT_REVISION} -X main.branch=${ESTAFETTE_GIT_BRANCH} -X main.buildDate=${ESTAFETTE_BUILD_DATETIME}\" -o ./publish/${ESTAFETTE_LABEL_APP} ."],"When":"status == ''succeeded''","EnvVars":{"CGO_ENABLED":"0","DOCKER_API_VERSION":"1.38","GOOS":"linux"},"AutoInjected":false,"Retries":0,"CustomProperties":null},{"Name":"bake-estafette","ContainerImage":"extensions/docker:dev","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":false,"Retries":0,"CustomProperties":{"action":"build","copy":["Dockerfile"],"path":"./publish","repositories":["estafette"]}}],"Releases":null},"jobName":"build-estafette-estafette-ci-builder-391855387650326531","ciServer":{"baseUrl":"https://httpstat.us/200","builderEventsUrl":"https://httpstat.us/200","postLogsUrl":"https://httpstat.us/200","apiKey":""},"buildParams":{"buildID":391855387650326531},"git":{"repoSource":"github.com","repoOwner":"estafette","repoName":"estafette-ci-builder","repoBranch":"integration-test","repoRevision":"f394515b2a91ea69addf42e4b722442b2905e268"},"buildVersion":{"version":"0.0.0-integration-test","major":0,"minor":0,"patch":"0","autoincrement":0},"credentials":[{"name":"github-api-token","type":"github-api-token","additionalProperties":{"token":"estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)"}}],"trustedImages":[{"path":"extensions/docker","runDocker":true},{"path":"estafette/estafette-ci-builder","runPrivileged":true},{"path":"golang","runDocker":true,"allowCommands":true}]}`
 		expectedValue := `{"action":"build","track":"dev","manifest":{"Builder":{"Track":"stable"},"Labels":{"app":"estafette-ci-builder","app-group":"estafette-ci","language":"golang","team":"estafette-team"},"Version":{"SemVer":{"Major":0,"Minor":0,"Patch":"{{auto}}","LabelTemplate":"{{branch}}","ReleaseBranch":"master"},"Custom":null},"GlobalEnvVars":null,"Pipelines":[{"Name":"git-clone","ContainerImage":"extensions/git-clone:stable","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null, "shallow": false,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":true,"Retries":0,"CustomProperties":null},{"Name":"build","ContainerImage":"golang:1.11.0-alpine3.8","Shell":"/bin/sh","WorkingDirectory":"/go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}","Commands":["apk --update add git","go test 'go list ./... | grep -v /vendor/'","go build -a -installsuffix cgo -ldflags \"-X main.version=${ESTAFETTE_BUILD_VERSION} -X main.revision=${ESTAFETTE_GIT_REVISION} -X main.branch=${ESTAFETTE_GIT_BRANCH} -X main.buildDate=${ESTAFETTE_BUILD_DATETIME}\" -o ./publish/${ESTAFETTE_LABEL_APP} ."],"When":"status == ''succeeded''","EnvVars":{"CGO_ENABLED":"0","DOCKER_API_VERSION":"1.38","GOOS":"linux"},"AutoInjected":false,"Retries":0,"CustomProperties":null},{"Name":"bake-estafette","ContainerImage":"extensions/docker:dev","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":false,"Retries":0,"CustomProperties":{"action":"build","copy":["Dockerfile"],"path":"./publish","repositories":["estafette"]}}],"Releases":null},"jobName":"build-estafette-estafette-ci-builder-391855387650326531","ciServer":{"baseUrl":"https://httpstat.us/200","builderEventsUrl":"https://httpstat.us/200","postLogsUrl":"https://httpstat.us/200","apiKey":""},"buildParams":{"buildID":391855387650326531},"git":{"repoSource":"github.com","repoOwner":"estafette","repoName":"estafette-ci-builder","repoBranch":"integration-test","repoRevision":"f394515b2a91ea69addf42e4b722442b2905e268"},"buildVersion":{"version":"0.0.0-integration-test","major":0,"minor":0,"patch":"0","autoincrement":0},"credentials":[{"name":"github-api-token","type":"github-api-token","additionalProperties":{"token":"this is my secret"}}],"trustedImages":[{"path":"extensions/docker","runDocker":true},{"path":"estafette/estafette-ci-builder","runPrivileged":true},{"path":"golang","runDocker":true,"allowCommands":true}]}`
+		pipeline := "github.com/estafette/estafette-ci-api"
 
 		// act
-		decryptedText, err := secretHelper.DecryptAllEnvelopes(builderConfigJSON)
+		decryptedText, err := secretHelper.DecryptAllEnvelopes(builderConfigJSON, pipeline)
 
 		assert.Nil(t, err)
 		assert.Equal(t, expectedValue, decryptedText)
@@ -132,9 +239,10 @@ func TestReencryptAllEnvelopes(t *testing.T) {
 		base64encodedKey := false
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", base64encodedKey)
 		builderConfigJSON := `{"action":"build","track":"dev","manifest":{"Builder":{"Track":"stable"},"Labels":{"app":"estafette-ci-builder","app-group":"estafette-ci","language":"golang","team":"estafette-team"},"Version":{"SemVer":{"Major":0,"Minor":0,"Patch":"{{auto}}","LabelTemplate":"{{branch}}","ReleaseBranch":"master"},"Custom":null},"GlobalEnvVars":null,"Pipelines":[{"Name":"git-clone","ContainerImage":"extensions/git-clone:stable","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null, "shallow": false,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":true,"Retries":0,"CustomProperties":null},{"Name":"build","ContainerImage":"golang:1.11.0-alpine3.8","Shell":"/bin/sh","WorkingDirectory":"/go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}","Commands":["apk --update add git","go test 'go list ./... | grep -v /vendor/'","go build -a -installsuffix cgo -ldflags \"-X main.version=${ESTAFETTE_BUILD_VERSION} -X main.revision=${ESTAFETTE_GIT_REVISION} -X main.branch=${ESTAFETTE_GIT_BRANCH} -X main.buildDate=${ESTAFETTE_BUILD_DATETIME}\" -o ./publish/${ESTAFETTE_LABEL_APP} ."],"When":"status == ''succeeded''","EnvVars":{"CGO_ENABLED":"0","DOCKER_API_VERSION":"1.38","GOOS":"linux"},"AutoInjected":false,"Retries":0,"CustomProperties":null},{"Name":"bake-estafette","ContainerImage":"extensions/docker:dev","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":false,"Retries":0,"CustomProperties":{"action":"build","copy":["Dockerfile"],"path":"./publish","repositories":["estafette"]}}],"Releases":null},"jobName":"build-estafette-estafette-ci-builder-391855387650326531","ciServer":{"baseUrl":"https://httpstat.us/200","builderEventsUrl":"https://httpstat.us/200","postLogsUrl":"https://httpstat.us/200","apiKey":""},"buildParams":{"buildID":391855387650326531},"git":{"repoSource":"github.com","repoOwner":"estafette","repoName":"estafette-ci-builder","repoBranch":"integration-test","repoRevision":"f394515b2a91ea69addf42e4b722442b2905e268"},"buildVersion":{"version":"0.0.0-integration-test","major":0,"minor":0,"patch":"0","autoincrement":0},"credentials":[{"name":"github-api-token","type":"github-api-token","additionalProperties":{"token":"estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)"}}],"trustedImages":[{"path":"extensions/docker","runDocker":true},{"path":"estafette/estafette-ci-builder","runPrivileged":true},{"path":"golang","runDocker":true,"allowCommands":true}]}`
+		pipeline := "github.com/estafette/estafette-ci-api"
 
 		// act
-		reencryptedText, key, err := secretHelper.ReencryptAllEnvelopes(builderConfigJSON, base64encodedKey)
+		reencryptedText, key, err := secretHelper.ReencryptAllEnvelopes(builderConfigJSON, pipeline, base64encodedKey)
 
 		assert.Nil(t, err)
 		assert.Equal(t, 32, len(key))
@@ -146,9 +254,10 @@ func TestReencryptAllEnvelopes(t *testing.T) {
 		base64encodedKey := true
 		secretHelper := NewSecretHelper("U2F6YndNZjNOWnhWVmJCcVFIZWJQY1hDcXJWbjNERHA=", base64encodedKey)
 		builderConfigJSON := `{"action":"build","track":"dev","manifest":{"Builder":{"Track":"stable"},"Labels":{"app":"estafette-ci-builder","app-group":"estafette-ci","language":"golang","team":"estafette-team"},"Version":{"SemVer":{"Major":0,"Minor":0,"Patch":"{{auto}}","LabelTemplate":"{{branch}}","ReleaseBranch":"master"},"Custom":null},"GlobalEnvVars":null,"Pipelines":[{"Name":"git-clone","ContainerImage":"extensions/git-clone:stable","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null, "shallow": false,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":true,"Retries":0,"CustomProperties":null},{"Name":"build","ContainerImage":"golang:1.11.0-alpine3.8","Shell":"/bin/sh","WorkingDirectory":"/go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}","Commands":["apk --update add git","go test 'go list ./... | grep -v /vendor/'","go build -a -installsuffix cgo -ldflags \"-X main.version=${ESTAFETTE_BUILD_VERSION} -X main.revision=${ESTAFETTE_GIT_REVISION} -X main.branch=${ESTAFETTE_GIT_BRANCH} -X main.buildDate=${ESTAFETTE_BUILD_DATETIME}\" -o ./publish/${ESTAFETTE_LABEL_APP} ."],"When":"status == ''succeeded''","EnvVars":{"CGO_ENABLED":"0","DOCKER_API_VERSION":"1.38","GOOS":"linux"},"AutoInjected":false,"Retries":0,"CustomProperties":null},{"Name":"bake-estafette","ContainerImage":"extensions/docker:dev","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":false,"Retries":0,"CustomProperties":{"action":"build","copy":["Dockerfile"],"path":"./publish","repositories":["estafette"]}}],"Releases":null},"jobName":"build-estafette-estafette-ci-builder-391855387650326531","ciServer":{"baseUrl":"https://httpstat.us/200","builderEventsUrl":"https://httpstat.us/200","postLogsUrl":"https://httpstat.us/200","apiKey":""},"buildParams":{"buildID":391855387650326531},"git":{"repoSource":"github.com","repoOwner":"estafette","repoName":"estafette-ci-builder","repoBranch":"integration-test","repoRevision":"f394515b2a91ea69addf42e4b722442b2905e268"},"buildVersion":{"version":"0.0.0-integration-test","major":0,"minor":0,"patch":"0","autoincrement":0},"credentials":[{"name":"github-api-token","type":"github-api-token","additionalProperties":{"token":"estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)"}}],"trustedImages":[{"path":"extensions/docker","runDocker":true},{"path":"estafette/estafette-ci-builder","runPrivileged":true},{"path":"golang","runDocker":true,"allowCommands":true}]}`
+		pipeline := "github.com/estafette/estafette-ci-api"
 
 		// act
-		reencryptedText, key, err := secretHelper.ReencryptAllEnvelopes(builderConfigJSON, base64encodedKey)
+		reencryptedText, key, err := secretHelper.ReencryptAllEnvelopes(builderConfigJSON, pipeline, base64encodedKey)
 
 		assert.Nil(t, err)
 		assert.Equal(t, 44, len(key))
@@ -161,12 +270,13 @@ func TestReencryptAllEnvelopes(t *testing.T) {
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", base64encodedKey)
 		builderConfigJSON := `{"action":"build","track":"dev","manifest":{"Builder":{"Track":"stable"},"Labels":{"app":"estafette-ci-builder","app-group":"estafette-ci","language":"golang","team":"estafette-team"},"Version":{"SemVer":{"Major":0,"Minor":0,"Patch":"{{auto}}","LabelTemplate":"{{branch}}","ReleaseBranch":"master"},"Custom":null},"GlobalEnvVars":null,"Pipelines":[{"Name":"git-clone","ContainerImage":"extensions/git-clone:stable","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null, "shallow": false,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":true,"Retries":0,"CustomProperties":null},{"Name":"build","ContainerImage":"golang:1.11.0-alpine3.8","Shell":"/bin/sh","WorkingDirectory":"/go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}","Commands":["apk --update add git","go test 'go list ./... | grep -v /vendor/'","go build -a -installsuffix cgo -ldflags \"-X main.version=${ESTAFETTE_BUILD_VERSION} -X main.revision=${ESTAFETTE_GIT_REVISION} -X main.branch=${ESTAFETTE_GIT_BRANCH} -X main.buildDate=${ESTAFETTE_BUILD_DATETIME}\" -o ./publish/${ESTAFETTE_LABEL_APP} ."],"When":"status == ''succeeded''","EnvVars":{"CGO_ENABLED":"0","DOCKER_API_VERSION":"1.38","GOOS":"linux"},"AutoInjected":false,"Retries":0,"CustomProperties":null},{"Name":"bake-estafette","ContainerImage":"extensions/docker:dev","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":false,"Retries":0,"CustomProperties":{"action":"build","copy":["Dockerfile"],"path":"./publish","repositories":["estafette"]}}],"Releases":null},"jobName":"build-estafette-estafette-ci-builder-391855387650326531","ciServer":{"baseUrl":"https://httpstat.us/200","builderEventsUrl":"https://httpstat.us/200","postLogsUrl":"https://httpstat.us/200","apiKey":""},"buildParams":{"buildID":391855387650326531},"git":{"repoSource":"github.com","repoOwner":"estafette","repoName":"estafette-ci-builder","repoBranch":"integration-test","repoRevision":"f394515b2a91ea69addf42e4b722442b2905e268"},"buildVersion":{"version":"0.0.0-integration-test","major":0,"minor":0,"patch":"0","autoincrement":0},"credentials":[{"name":"github-api-token","type":"github-api-token","additionalProperties":{"token":"estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)"}}],"trustedImages":[{"path":"extensions/docker","runDocker":true},{"path":"estafette/estafette-ci-builder","runPrivileged":true},{"path":"golang","runDocker":true,"allowCommands":true}]}`
 		expectedValue := `{"action":"build","track":"dev","manifest":{"Builder":{"Track":"stable"},"Labels":{"app":"estafette-ci-builder","app-group":"estafette-ci","language":"golang","team":"estafette-team"},"Version":{"SemVer":{"Major":0,"Minor":0,"Patch":"{{auto}}","LabelTemplate":"{{branch}}","ReleaseBranch":"master"},"Custom":null},"GlobalEnvVars":null,"Pipelines":[{"Name":"git-clone","ContainerImage":"extensions/git-clone:stable","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null, "shallow": false,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":true,"Retries":0,"CustomProperties":null},{"Name":"build","ContainerImage":"golang:1.11.0-alpine3.8","Shell":"/bin/sh","WorkingDirectory":"/go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}","Commands":["apk --update add git","go test 'go list ./... | grep -v /vendor/'","go build -a -installsuffix cgo -ldflags \"-X main.version=${ESTAFETTE_BUILD_VERSION} -X main.revision=${ESTAFETTE_GIT_REVISION} -X main.branch=${ESTAFETTE_GIT_BRANCH} -X main.buildDate=${ESTAFETTE_BUILD_DATETIME}\" -o ./publish/${ESTAFETTE_LABEL_APP} ."],"When":"status == ''succeeded''","EnvVars":{"CGO_ENABLED":"0","DOCKER_API_VERSION":"1.38","GOOS":"linux"},"AutoInjected":false,"Retries":0,"CustomProperties":null},{"Name":"bake-estafette","ContainerImage":"extensions/docker:dev","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":false,"Retries":0,"CustomProperties":{"action":"build","copy":["Dockerfile"],"path":"./publish","repositories":["estafette"]}}],"Releases":null},"jobName":"build-estafette-estafette-ci-builder-391855387650326531","ciServer":{"baseUrl":"https://httpstat.us/200","builderEventsUrl":"https://httpstat.us/200","postLogsUrl":"https://httpstat.us/200","apiKey":""},"buildParams":{"buildID":391855387650326531},"git":{"repoSource":"github.com","repoOwner":"estafette","repoName":"estafette-ci-builder","repoBranch":"integration-test","repoRevision":"f394515b2a91ea69addf42e4b722442b2905e268"},"buildVersion":{"version":"0.0.0-integration-test","major":0,"minor":0,"patch":"0","autoincrement":0},"credentials":[{"name":"github-api-token","type":"github-api-token","additionalProperties":{"token":"this is my secret"}}],"trustedImages":[{"path":"extensions/docker","runDocker":true},{"path":"estafette/estafette-ci-builder","runPrivileged":true},{"path":"golang","runDocker":true,"allowCommands":true}]}`
+		pipeline := "github.com/estafette/estafette-ci-api"
 
-		reencryptedText, key, err := secretHelper.ReencryptAllEnvelopes(builderConfigJSON, base64encodedKey)
+		reencryptedText, key, err := secretHelper.ReencryptAllEnvelopes(builderConfigJSON, pipeline, base64encodedKey)
 		secretHelper = NewSecretHelper(key, base64encodedKey)
 
 		// act
-		decryptedText, err := secretHelper.DecryptAllEnvelopes(reencryptedText)
+		decryptedText, err := secretHelper.DecryptAllEnvelopes(reencryptedText, pipeline)
 
 		assert.Nil(t, err)
 		assert.Equal(t, expectedValue, decryptedText)
@@ -178,12 +288,13 @@ func TestReencryptAllEnvelopes(t *testing.T) {
 		secretHelper := NewSecretHelper("U2F6YndNZjNOWnhWVmJCcVFIZWJQY1hDcXJWbjNERHA=", base64encodedKey)
 		builderConfigJSON := `{"action":"build","track":"dev","manifest":{"Builder":{"Track":"stable"},"Labels":{"app":"estafette-ci-builder","app-group":"estafette-ci","language":"golang","team":"estafette-team"},"Version":{"SemVer":{"Major":0,"Minor":0,"Patch":"{{auto}}","LabelTemplate":"{{branch}}","ReleaseBranch":"master"},"Custom":null},"GlobalEnvVars":null,"Pipelines":[{"Name":"git-clone","ContainerImage":"extensions/git-clone:stable","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null, "shallow": false,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":true,"Retries":0,"CustomProperties":null},{"Name":"build","ContainerImage":"golang:1.11.0-alpine3.8","Shell":"/bin/sh","WorkingDirectory":"/go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}","Commands":["apk --update add git","go test 'go list ./... | grep -v /vendor/'","go build -a -installsuffix cgo -ldflags \"-X main.version=${ESTAFETTE_BUILD_VERSION} -X main.revision=${ESTAFETTE_GIT_REVISION} -X main.branch=${ESTAFETTE_GIT_BRANCH} -X main.buildDate=${ESTAFETTE_BUILD_DATETIME}\" -o ./publish/${ESTAFETTE_LABEL_APP} ."],"When":"status == ''succeeded''","EnvVars":{"CGO_ENABLED":"0","DOCKER_API_VERSION":"1.38","GOOS":"linux"},"AutoInjected":false,"Retries":0,"CustomProperties":null},{"Name":"bake-estafette","ContainerImage":"extensions/docker:dev","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":false,"Retries":0,"CustomProperties":{"action":"build","copy":["Dockerfile"],"path":"./publish","repositories":["estafette"]}}],"Releases":null},"jobName":"build-estafette-estafette-ci-builder-391855387650326531","ciServer":{"baseUrl":"https://httpstat.us/200","builderEventsUrl":"https://httpstat.us/200","postLogsUrl":"https://httpstat.us/200","apiKey":""},"buildParams":{"buildID":391855387650326531},"git":{"repoSource":"github.com","repoOwner":"estafette","repoName":"estafette-ci-builder","repoBranch":"integration-test","repoRevision":"f394515b2a91ea69addf42e4b722442b2905e268"},"buildVersion":{"version":"0.0.0-integration-test","major":0,"minor":0,"patch":"0","autoincrement":0},"credentials":[{"name":"github-api-token","type":"github-api-token","additionalProperties":{"token":"estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)"}}],"trustedImages":[{"path":"extensions/docker","runDocker":true},{"path":"estafette/estafette-ci-builder","runPrivileged":true},{"path":"golang","runDocker":true,"allowCommands":true}]}`
 		expectedValue := `{"action":"build","track":"dev","manifest":{"Builder":{"Track":"stable"},"Labels":{"app":"estafette-ci-builder","app-group":"estafette-ci","language":"golang","team":"estafette-team"},"Version":{"SemVer":{"Major":0,"Minor":0,"Patch":"{{auto}}","LabelTemplate":"{{branch}}","ReleaseBranch":"master"},"Custom":null},"GlobalEnvVars":null,"Pipelines":[{"Name":"git-clone","ContainerImage":"extensions/git-clone:stable","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null, "shallow": false,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":true,"Retries":0,"CustomProperties":null},{"Name":"build","ContainerImage":"golang:1.11.0-alpine3.8","Shell":"/bin/sh","WorkingDirectory":"/go/src/github.com/estafette/${ESTAFETTE_LABEL_APP}","Commands":["apk --update add git","go test 'go list ./... | grep -v /vendor/'","go build -a -installsuffix cgo -ldflags \"-X main.version=${ESTAFETTE_BUILD_VERSION} -X main.revision=${ESTAFETTE_GIT_REVISION} -X main.branch=${ESTAFETTE_GIT_BRANCH} -X main.buildDate=${ESTAFETTE_BUILD_DATETIME}\" -o ./publish/${ESTAFETTE_LABEL_APP} ."],"When":"status == ''succeeded''","EnvVars":{"CGO_ENABLED":"0","DOCKER_API_VERSION":"1.38","GOOS":"linux"},"AutoInjected":false,"Retries":0,"CustomProperties":null},{"Name":"bake-estafette","ContainerImage":"extensions/docker:dev","Shell":"/bin/sh","WorkingDirectory":"/estafette-work","Commands":null,"When":"status == ''succeeded''","EnvVars":null,"AutoInjected":false,"Retries":0,"CustomProperties":{"action":"build","copy":["Dockerfile"],"path":"./publish","repositories":["estafette"]}}],"Releases":null},"jobName":"build-estafette-estafette-ci-builder-391855387650326531","ciServer":{"baseUrl":"https://httpstat.us/200","builderEventsUrl":"https://httpstat.us/200","postLogsUrl":"https://httpstat.us/200","apiKey":""},"buildParams":{"buildID":391855387650326531},"git":{"repoSource":"github.com","repoOwner":"estafette","repoName":"estafette-ci-builder","repoBranch":"integration-test","repoRevision":"f394515b2a91ea69addf42e4b722442b2905e268"},"buildVersion":{"version":"0.0.0-integration-test","major":0,"minor":0,"patch":"0","autoincrement":0},"credentials":[{"name":"github-api-token","type":"github-api-token","additionalProperties":{"token":"this is my secret"}}],"trustedImages":[{"path":"extensions/docker","runDocker":true},{"path":"estafette/estafette-ci-builder","runPrivileged":true},{"path":"golang","runDocker":true,"allowCommands":true}]}`
+		pipeline := "github.com/estafette/estafette-ci-api"
 
-		reencryptedText, key, err := secretHelper.ReencryptAllEnvelopes(builderConfigJSON, base64encodedKey)
+		reencryptedText, key, err := secretHelper.ReencryptAllEnvelopes(builderConfigJSON, pipeline, base64encodedKey)
 		secretHelper = NewSecretHelper(key, base64encodedKey)
 
 		// act
-		decryptedText, err := secretHelper.DecryptAllEnvelopes(reencryptedText)
+		decryptedText, err := secretHelper.DecryptAllEnvelopes(reencryptedText, pipeline)
 
 		assert.Nil(t, err)
 		assert.Equal(t, expectedValue, decryptedText)
