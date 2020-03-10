@@ -15,6 +15,9 @@ import (
 // DefaultPipelineWhitelist is the regular expression that allows any pipeline to decrypt a secret
 const DefaultPipelineWhitelist = ".*"
 
+// SecretEnvelopeRegex is the regular expression to match an estafette secret envelope
+const SecretEnvelopeRegex = `estafette\.secret\(([a-zA-Z0-9.=_-]+)\)`
+
 // SecretHelper is the interface for encrypting and decrypting secrets
 type SecretHelper interface {
 	Encrypt(unencryptedText, pipelineWhitelist string) (encryptedTextPlusNonce string, err error)
@@ -24,6 +27,9 @@ type SecretHelper interface {
 	DecryptAllEnvelopes(encryptedTextWithEnvelopes, pipeline string) (decryptedText string, err error)
 	ReencryptAllEnvelopes(encryptedTextWithEnvelopes, pipeline string, base64encodedKey bool) (reencryptedText string, key string, err error)
 	GenerateKey(numberOfBytes int, base64encodedKey bool) (key string, err error)
+	GetAllSecretEnvelopes(input string) (envelopes []string, err error)
+	GetAllSecrets(input string) (secrets []string, err error)
+	GetAllSecretValues(input, pipeline string) (values []string, err error)
 }
 
 type secretHelperImpl struct {
@@ -179,7 +185,7 @@ func (sh *secretHelperImpl) encryptEnvelopeWithKey(unencryptedText, pipelineWhit
 
 func (sh *secretHelperImpl) DecryptEnvelope(encryptedTextInEnvelope, pipeline string) (decryptedText, pipelineWhitelist string, err error) {
 
-	r, err := regexp.Compile(`^estafette\.secret\(([a-zA-Z0-9.=_-]+)\)$`)
+	r, err := regexp.Compile(fmt.Sprintf("^%v$", SecretEnvelopeRegex))
 	if err != nil {
 		return
 	}
@@ -209,7 +215,7 @@ func (sh *secretHelperImpl) decryptEnvelopeInBytes(encryptedTextInEnvelope []byt
 
 func (sh *secretHelperImpl) DecryptAllEnvelopes(encryptedTextWithEnvelopes, pipeline string) (decryptedText string, err error) {
 
-	r, err := regexp.Compile(`estafette\.secret\([a-zA-Z0-9.=_-]+\)`)
+	r, err := regexp.Compile(SecretEnvelopeRegex)
 	if err != nil {
 		return
 	}
@@ -247,7 +253,7 @@ func (sh *secretHelperImpl) ReencryptAllEnvelopes(encryptedTextWithEnvelopes, pi
 	}
 
 	// scan for all secrets and replace them with new secret
-	r, err := regexp.Compile(`estafette\.secret\([a-zA-Z0-9.=_-]+\)`)
+	r, err := regexp.Compile(SecretEnvelopeRegex)
 	if err != nil {
 		return
 	}
@@ -268,4 +274,65 @@ func (sh *secretHelperImpl) ReencryptAllEnvelopes(encryptedTextWithEnvelopes, pi
 	}))
 
 	return reencryptedText, key, nil
+}
+
+func (sh *secretHelperImpl) GetAllSecretEnvelopes(input string) (envelopes []string, err error) {
+
+	r, err := regexp.Compile(SecretEnvelopeRegex)
+	if err != nil {
+		return
+	}
+
+	matches := r.FindAllStringSubmatch(input, -1)
+	if matches != nil {
+		for _, m := range matches {
+			if len(m) > 1 {
+				envelopes = append(envelopes, m[0])
+			}
+		}
+	}
+
+	return
+}
+
+func (sh *secretHelperImpl) GetAllSecrets(input string) (secrets []string, err error) {
+
+	r, err := regexp.Compile(SecretEnvelopeRegex)
+	if err != nil {
+		return
+	}
+
+	matches := r.FindAllStringSubmatch(input, -1)
+	if matches != nil {
+		for _, m := range matches {
+			if len(m) > 1 {
+				secrets = append(secrets, m[1])
+			}
+		}
+	}
+
+	return
+}
+
+func (sh *secretHelperImpl) GetAllSecretValues(input, pipeline string) (values []string, err error) {
+
+	r, err := regexp.Compile(SecretEnvelopeRegex)
+	if err != nil {
+		return
+	}
+
+	matches := r.FindAllStringSubmatch(input, -1)
+	if matches != nil {
+		for _, m := range matches {
+			if len(m) > 1 {
+				decryptedText, _, err := sh.Decrypt(m[1], pipeline)
+				if err != nil {
+					return []string{}, err
+				}
+				values = append(values, decryptedText)
+			}
+		}
+	}
+
+	return
 }

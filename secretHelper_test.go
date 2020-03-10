@@ -300,3 +300,94 @@ func TestReencryptAllEnvelopes(t *testing.T) {
 		assert.Equal(t, expectedValue, decryptedText)
 	})
 }
+
+func TestGetAllSecretEnvelopes(t *testing.T) {
+
+	t.Run("ReturnsAllEnvelopes", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+
+		input := `
+		estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)
+
+		estafette.secret(7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ=)
+		`
+
+		// act
+		envelopes, err := secretHelper.GetAllSecretEnvelopes(input)
+
+		assert.Nil(t, err)
+		if !assert.Equal(t, 2, len(envelopes)) {
+			return
+		}
+		assert.Equal(t, "estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)", envelopes[0])
+		assert.Equal(t, "estafette.secret(7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ=)", envelopes[1])
+	})
+}
+
+func TestGetAllSecrets(t *testing.T) {
+
+	t.Run("ReturnsAllEnvelopeContents", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+
+		input := `
+		estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)
+
+		estafette.secret(7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ=)
+		`
+
+		// act
+		secrets, err := secretHelper.GetAllSecrets(input)
+
+		assert.Nil(t, err)
+		if !assert.Equal(t, 2, len(secrets)) {
+			return
+		}
+		assert.Equal(t, "deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u", secrets[0])
+		assert.Equal(t, "7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ=", secrets[1])
+	})
+}
+
+func TestGetAllSecretValues(t *testing.T) {
+
+	t.Run("ReturnsAllDecryptedSecretValues", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+
+		input := `
+		estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)
+
+		estafette.secret(7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ=)
+		`
+		pipeline := "github.com/estafette/estafette-ci-api"
+
+		// act
+		values, err := secretHelper.GetAllSecretValues(input, pipeline)
+
+		assert.Nil(t, err)
+		if !assert.Equal(t, 2, len(values)) {
+			return
+		}
+		assert.Equal(t, "this is my secret", values[0])
+		assert.Equal(t, "this is my secret", values[1])
+	})
+
+	t.Run("ReturnsErrorIfAnySecretIsNotWhitelistedForPipeline", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+
+		input := `
+		estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)
+
+		estafette.secret(7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ=)
+		`
+		pipeline := "github.com/estafette/estafette-ci-web"
+
+		// act
+		values, err := secretHelper.GetAllSecretValues(input, pipeline)
+
+		assert.NotNil(t, err)
+		assert.Equal(t, 0, len(values))
+	})
+}
