@@ -12,6 +12,11 @@ import (
 	"strings"
 )
 
+var (
+	// ErrRestrictedSecret is thrown if a restricted secret for another pipeline is encountered
+	ErrRestrictedSecret = errors.New("This secret is restricted to another pipeline")
+)
+
 // DefaultPipelineWhitelist is the regular expression that allows any pipeline to decrypt a secret
 const DefaultPipelineWhitelist = ".*"
 
@@ -152,7 +157,7 @@ func (sh *secretHelperImpl) decryptWithKey(encryptedTextPlusNonce, pipeline stri
 		return
 	}
 	if !validForPipeline {
-		return "", "", fmt.Errorf("Pipeline %v does not match regular expression ^%v$", pipeline, pipelineWhitelist)
+		return "", "", ErrRestrictedSecret
 	}
 
 	// get value
