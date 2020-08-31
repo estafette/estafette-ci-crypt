@@ -9,14 +9,14 @@ import (
 
 func TestEncrypt(t *testing.T) {
 
-	t.Run("ReturnsEncryptedValueWithNonceDotEncryptedStringIfPipelineWhitelistIsEmpty", func(t *testing.T) {
+	t.Run("ReturnsEncryptedValueWithNonceDotEncryptedStringIfPipelineAllowListIsEmpty", func(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		originalText := "this is my secret"
-		pipelineWhitelist := ""
+		pipelineAllowList := ""
 
 		// act
-		encryptedTextPlusNonce, err := secretHelper.Encrypt(originalText, pipelineWhitelist)
+		encryptedTextPlusNonce, err := secretHelper.Encrypt(originalText, pipelineAllowList)
 
 		assert.Nil(t, err)
 		splittedStrings := strings.Split(encryptedTextPlusNonce, ".")
@@ -25,14 +25,14 @@ func TestEncrypt(t *testing.T) {
 		// fmt.Println(encryptedTextPlusNonce)
 	})
 
-	t.Run("ReturnsEncryptedValueWithNonceDotEncryptedStringIfPipelineWhitelistIsDefault", func(t *testing.T) {
+	t.Run("ReturnsEncryptedValueWithNonceDotEncryptedStringIfPipelineAllowListIsDefault", func(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		originalText := "this is my secret"
-		pipelineWhitelist := ".*"
+		pipelineAllowList := ".*"
 
 		// act
-		encryptedTextPlusNonce, err := secretHelper.Encrypt(originalText, pipelineWhitelist)
+		encryptedTextPlusNonce, err := secretHelper.Encrypt(originalText, pipelineAllowList)
 
 		assert.Nil(t, err)
 		splittedStrings := strings.Split(encryptedTextPlusNonce, ".")
@@ -41,14 +41,14 @@ func TestEncrypt(t *testing.T) {
 		// fmt.Println(encryptedTextPlusNonce)
 	})
 
-	t.Run("ReturnsEncryptedValueWithNonceDotEncryptedStringDotPipelineWhitelistIfPipelineWhitelistIsNonDefault", func(t *testing.T) {
+	t.Run("ReturnsEncryptedValueWithNonceDotEncryptedStringDotPipelineAllowListIfPipelineAllowListIsNonDefault", func(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		originalText := "this is my secret"
-		pipelineWhitelist := "github.com/estafette/estafette-ci-api"
+		pipelineAllowList := "github.com/estafette/estafette-ci-api"
 
 		// act
-		encryptedTextPlusNonce, err := secretHelper.Encrypt(originalText, pipelineWhitelist)
+		encryptedTextPlusNonce, err := secretHelper.Encrypt(originalText, pipelineAllowList)
 
 		assert.Nil(t, err)
 		splittedStrings := strings.Split(encryptedTextPlusNonce, ".")
@@ -65,10 +65,10 @@ func TestEncryptEnvelope(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		originalText := "this is my secret"
-		pipelineWhitelist := ""
+		pipelineAllowList := ""
 
 		// act
-		encryptedTextInEnvelope, err := secretHelper.EncryptEnvelope(originalText, pipelineWhitelist)
+		encryptedTextInEnvelope, err := secretHelper.EncryptEnvelope(originalText, pipelineAllowList)
 
 		assert.Nil(t, err)
 		assert.True(t, strings.HasPrefix(encryptedTextInEnvelope, "estafette.secret("))
@@ -99,10 +99,10 @@ func TestDecrypt(t *testing.T) {
 		pipeline := "github.com/estafette/estafette-ci-api"
 
 		// act
-		_, pipelineWhitelist, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
+		_, pipelineAllowList, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
 
 		assert.Nil(t, err)
-		assert.Equal(t, ".*", pipelineWhitelist)
+		assert.Equal(t, ".*", pipelineAllowList)
 	})
 
 	t.Run("ReturnsErrorIfStringDoesNotContainDot", func(t *testing.T) {
@@ -137,11 +137,11 @@ func TestDecrypt(t *testing.T) {
 		pipeline := "github.com/estafette/estafette-ci-api"
 
 		// act
-		decryptedText, pipelineWhitelist, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
+		decryptedText, pipelineAllowList, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
 
 		assert.Nil(t, err)
 		assert.Equal(t, originalText, decryptedText)
-		assert.Equal(t, "github.com/estafette/estafette-ci-api", pipelineWhitelist)
+		assert.Equal(t, "github.com/estafette/estafette-ci-api", pipelineAllowList)
 	})
 
 	t.Run("ReturnsDecryptedPipelineWhiteListIfStringContainsTwoDotsAndPipelineMatchesRegex", func(t *testing.T) {
@@ -152,14 +152,14 @@ func TestDecrypt(t *testing.T) {
 		pipeline := "github.com/estafette/estafette-ci-web"
 
 		// act
-		decryptedText, pipelineWhitelist, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
+		decryptedText, pipelineAllowList, err := secretHelper.Decrypt(encryptedTextPlusNonce, pipeline)
 
 		assert.Nil(t, err)
 		assert.Equal(t, originalText, decryptedText)
-		assert.Equal(t, "github.com/estafette/.+", pipelineWhitelist)
+		assert.Equal(t, "github.com/estafette/.+", pipelineAllowList)
 	})
 
-	t.Run("ReturnsErrorIfPipelineDoesNotMatchPipelineWhitelistRegex", func(t *testing.T) {
+	t.Run("ReturnsErrorIfPipelineDoesNotMatchPipelineAllowListRegex", func(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 		encryptedTextPlusNonce := "7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ="
@@ -373,7 +373,7 @@ func TestGetAllSecretValues(t *testing.T) {
 		assert.Equal(t, "this is my secret", values[1])
 	})
 
-	t.Run("ReturnsErrorIfAnySecretIsNotWhitelistedForPipeline", func(t *testing.T) {
+	t.Run("ReturnsErrorIfAnySecretIsNotAllowedForPipeline", func(t *testing.T) {
 
 		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
 
