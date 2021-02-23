@@ -1,6 +1,7 @@
 package crypt
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -413,5 +414,45 @@ func TestGetAllSecretValues(t *testing.T) {
 
 		assert.NotNil(t, err)
 		assert.Equal(t, 0, len(values))
+	})
+}
+
+func TestGetInvalidRestrictedSecrets(t *testing.T) {
+	t.Run("ReturnsNilIfAllSecretsAreGlobalOrRestrictedToCurrentPipeline", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+
+		input := `
+		estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)
+
+		estafette.secret(7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ=)
+		`
+		pipeline := "github.com/estafette/estafette-ci-api"
+
+		// act
+		invalidSecrets, err := secretHelper.GetInvalidRestrictedSecrets(input, pipeline)
+
+		assert.Nil(t, err)
+		assert.Equal(t, 0, len(invalidSecrets))
+	})
+
+	t.Run("ReturnsErrorWithListOfSecretsRestrictedToOtherPipelines", func(t *testing.T) {
+
+		secretHelper := NewSecretHelper("SazbwMf3NZxVVbBqQHebPcXCqrVn3DDp", false)
+
+		input := `
+		estafette.secret(deFTz5Bdjg6SUe29.oPIkXbze5G9PNEWS2-ZnArl8BCqHnx4MdTdxHg37th9u)
+
+		estafette.secret(7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ=)
+		`
+		pipeline := "github.com/estafette/estafette-ci-web"
+
+		// act
+		invalidSecrets, err := secretHelper.GetInvalidRestrictedSecrets(input, pipeline)
+
+		assert.NotNil(t, err)
+		assert.True(t, errors.Is(err, ErrRestrictedSecret))
+		assert.Equal(t, 1, len(invalidSecrets))
+		assert.Equal(t, "estafette.secret(7pB-Znp16my5l-Gz.l--UakUaK5N8KYFt-sVNUaOY5uobSpWabJNVXYDEyDWT.hO6JcRARdtB-PY577NJeUrKMVOx-sjg617wTd8IkAh-PvIm9exuATeDeFiYaEr9eQtfreBQ=)", invalidSecrets[0])
 	})
 }

@@ -35,6 +35,7 @@ type SecretHelper interface {
 	GetAllSecretEnvelopes(input string) (envelopes []string, err error)
 	GetAllSecrets(input string) (secrets []string, err error)
 	GetAllSecretValues(input, pipeline string) (values []string, err error)
+	GetInvalidRestrictedSecrets(input, pipeline string) (invalidSecrets []string, err error)
 }
 
 type secretHelperImpl struct {
@@ -354,6 +355,32 @@ func (sh *secretHelperImpl) GetAllSecretValues(input, pipeline string) (values [
 				values = append(values, decryptedText)
 			}
 		}
+	}
+
+	return
+}
+
+func (sh *secretHelperImpl) GetInvalidRestrictedSecrets(input, pipeline string) (invalidSecrets []string, err error) {
+
+	r, err := regexp.Compile(SecretEnvelopeRegex)
+	if err != nil {
+		return
+	}
+
+	matches := r.FindAllStringSubmatch(input, -1)
+	if matches != nil {
+		for _, m := range matches {
+			if len(m) > 1 {
+				_, _, err := sh.Decrypt(m[1], pipeline)
+				if err != nil && errors.Is(err, ErrRestrictedSecret) {
+					invalidSecrets = append(invalidSecrets, m[0])
+				}
+			}
+		}
+	}
+
+	if len(invalidSecrets) > 0 {
+		return invalidSecrets, ErrRestrictedSecret
 	}
 
 	return
