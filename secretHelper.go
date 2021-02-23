@@ -107,11 +107,14 @@ func (sh *secretHelperImpl) encryptWithKey(unencryptedText, pipelineAllowList, k
 }
 
 func (sh *secretHelperImpl) Decrypt(encryptedTextPlusNonce, pipeline string) (decryptedText, pipelineAllowList string, err error) {
-
-	return sh.decryptWithKey(encryptedTextPlusNonce, pipeline, sh.key, sh.base64encodedKey)
+	return sh.decrypt(encryptedTextPlusNonce, pipeline, true)
 }
 
-func (sh *secretHelperImpl) decryptWithKey(encryptedTextPlusNonce, pipeline string, key string, base64encodedKey bool) (decryptedText, pipelineAllowList string, err error) {
+func (sh *secretHelperImpl) decrypt(encryptedTextPlusNonce, pipeline string, failOnRestrictError bool) (decryptedText, pipelineAllowList string, err error) {
+	return sh.decryptWithKey(encryptedTextPlusNonce, pipeline, sh.key, sh.base64encodedKey, failOnRestrictError)
+}
+
+func (sh *secretHelperImpl) decryptWithKey(encryptedTextPlusNonce, pipeline string, key string, base64encodedKey, failOnRestrictError bool) (decryptedText, pipelineAllowList string, err error) {
 
 	// get decryption key
 	keyBytes, err := sh.getKey(key, base64encodedKey)
@@ -151,13 +154,15 @@ func (sh *secretHelperImpl) decryptWithKey(encryptedTextPlusNonce, pipeline stri
 	}
 
 	// check if pipeline is matched by pipeline whitelist regular expression
-	pattern := fmt.Sprintf("^%v$", pipelineAllowList)
-	validForPipeline, err := regexp.MatchString(pattern, pipeline)
-	if err != nil {
-		return
-	}
-	if !validForPipeline {
-		return "", "", ErrRestrictedSecret
+	if failOnRestrictError {
+		pattern := fmt.Sprintf("^%v$", pipelineAllowList)
+		validForPipeline, innerErr := regexp.MatchString(pattern, pipeline)
+		if innerErr != nil {
+			return "", "", innerErr
+		}
+		if !validForPipeline {
+			return "", "", ErrRestrictedSecret
+		}
 	}
 
 	// get value
@@ -189,6 +194,10 @@ func (sh *secretHelperImpl) encryptEnvelopeWithKey(unencryptedText, pipelineAllo
 }
 
 func (sh *secretHelperImpl) DecryptEnvelope(encryptedTextInEnvelope, pipeline string) (decryptedText, pipelineAllowList string, err error) {
+	return sh.decryptEnvelope(encryptedTextInEnvelope, pipeline, true)
+}
+
+func (sh *secretHelperImpl) decryptEnvelope(encryptedTextInEnvelope, pipeline string, failOnRestrictError bool) (decryptedText, pipelineAllowList string, err error) {
 
 	r, err := regexp.Compile(fmt.Sprintf("^%v$", SecretEnvelopeRegex))
 	if err != nil {
@@ -200,7 +209,7 @@ func (sh *secretHelperImpl) DecryptEnvelope(encryptedTextInEnvelope, pipeline st
 		return encryptedTextInEnvelope, DefaultPipelineAllowList, nil
 	}
 
-	decryptedText, pipelineAllowList, err = sh.Decrypt(matches[1], pipeline)
+	decryptedText, pipelineAllowList, err = sh.decrypt(matches[1], pipeline, failOnRestrictError)
 	if err != nil {
 		return
 	}
@@ -208,14 +217,14 @@ func (sh *secretHelperImpl) DecryptEnvelope(encryptedTextInEnvelope, pipeline st
 	return
 }
 
-func (sh *secretHelperImpl) decryptEnvelopeInBytes(encryptedTextInEnvelope []byte, pipeline string) []byte {
+func (sh *secretHelperImpl) decryptEnvelopeInBytes(encryptedTextInEnvelope []byte, pipeline string) ([]byte, error) {
 
 	decryptedText, _, err := sh.DecryptEnvelope(string(encryptedTextInEnvelope), pipeline)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return []byte(decryptedText)
+	return []byte(decryptedText), nil
 }
 
 func (sh *secretHelperImpl) DecryptAllEnvelopes(encryptedTextWithEnvelopes, pipeline string) (decryptedText string, err error) {
@@ -225,9 +234,17 @@ func (sh *secretHelperImpl) DecryptAllEnvelopes(encryptedTextWithEnvelopes, pipe
 		return
 	}
 
+	var decryptErr error
 	decryptedText = string(r.ReplaceAllFunc([]byte(encryptedTextWithEnvelopes), func(in []byte) []byte {
-		return sh.decryptEnvelopeInBytes(in, pipeline)
+		bytes, innerErr := sh.decryptEnvelopeInBytes(in, pipeline)
+		if innerErr != nil {
+			decryptErr = innerErr
+		}
+		return bytes
 	}))
+	if decryptErr != nil {
+		return decryptedText, decryptErr
+	}
 
 	return
 }
@@ -265,7 +282,7 @@ func (sh *secretHelperImpl) ReencryptAllEnvelopes(encryptedTextWithEnvelopes, pi
 
 	reencryptedText = string(r.ReplaceAllFunc([]byte(encryptedTextWithEnvelopes), func(encryptedTextInEnvelope []byte) []byte {
 
-		decryptedText, pipelineAllowList, err := sh.DecryptEnvelope(string(encryptedTextInEnvelope), pipeline)
+		decryptedText, pipelineAllowList, err := sh.decryptEnvelope(string(encryptedTextInEnvelope), pipeline, false)
 		if err != nil {
 			return nil
 		}
