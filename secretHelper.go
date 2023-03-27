@@ -162,7 +162,14 @@ func (sh *secretHelperImpl) decryptWithKey(encryptedTextPlusNonce, pipeline stri
 			return "", "", innerErr
 		}
 		if !validForPipeline {
-			return "", "", ErrRestrictedSecret
+			pattern = fmt.Sprintf("^github.com/.*/%s$", strings.Split(pipelineAllowList, "/")[2])
+			validForPipeline, innerErr = regexp.MatchString(pattern, pipeline)
+			if innerErr != nil {
+				return "", "", innerErr
+			}
+			if !validForPipeline {
+				return "", "", ErrRestrictedSecret
+			}
 		}
 	}
 
