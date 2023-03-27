@@ -25,7 +25,6 @@ stages:
   tag-revision:
     image: bitnami/git
     commands:
-    - apk add git
     - git tag v${ESTAFETTE_BUILD_VERSION}
     - git push origin v${ESTAFETTE_BUILD_VERSION}
     when: status == 'succeeded' &&
